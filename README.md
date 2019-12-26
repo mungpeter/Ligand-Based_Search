@@ -10,6 +10,7 @@ Ligand-based searching for molecules using FingerPrint similarity
 > Note: RDKit uses Morgan FP, same principle as ECFP.<
 
 #######################################################################################
+- Folder structure
 ```
 |---- /Examples
           |---- /1_query_compare_fp    # compare 2 list of molecules using FP
@@ -46,6 +47,27 @@ result > recpt.zfg19.pairwise.fp_all.txt
 
 #####################################
 ```
+> 2_LIGSIFT_parse.py
+      -q     3D Query/Reference molecule     (sdf, mol2)
+      -db    List of 3D Molecule databases name, no extension
+             (txt of SDF, SDF only)
+      -cpu   Number of CPU to run            [default: 1]
+      -o     Output prefix
+      -rank  Output top ranking conformer    [default: 'ShapeSimPval']
+          'ShapeTanimoto', 'ChemTanimoto', 'ShapeSim', 'ChemSim',
+          'ShapeSimPval', 'ChemSimPval', 'TverskyShape', 'TverskyChem', 
+          'TverskyChem'\n
+   e.g.>  x.py  -q=ref.mol2  -db=db.list        -cpu=4 
+                -o=result    -rank=ShapeSimPval
+
+result >
+```
+- This uses [LIGSIFT](https://doi.org/10.1093/bioinformatics/btu692) program to perform a ligand-based 3D conformer screening.
+- To a 3D structure of a query/reference molecule, screen a library of molecules' 3D conformer to find those with similar shape and chemical features. Similar idea to OpenEye's [ROCS](https://www.eyesopen.com/rocs)+[EON](https://www.eyesopen.com/eon). Will need a pre-generated 3D conformer library from either OpenEye [OMEGA](https://www.eyesopen.com/omega), Schrödinger [ConfGen](https://www.schrodinger.com/confgen) or a RDKit [ETKDG](https://doi.org/10.1021/acs.jcim.5b00654), and perhaps others (Conformator [A](https://doi.org/10.1021/acs.jcim.8b00704) [B](https://www.zbh.uni-hamburg.de/forschung/amd/software/conformator.html) , [CSD](https://doi.org/10.1021/acs.jcim.7b00697) ).
+
+
+#####################################
+```
 > 3_lig_property.py
       [ Library of ligand:  smi|sdf ]
       [ Outprefix ]
@@ -60,7 +82,7 @@ result > recpt.zfg19.property.csv   recpt.zfg19.property.xlsx
 #######################################################################################
 # Required software / packages
 ```
-LIGSHFT
+LIGSIFT           # an open-source tool for ligand structural alignment and virtual screening
 ```
 
 ```
