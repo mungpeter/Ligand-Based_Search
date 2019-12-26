@@ -5,7 +5,7 @@
 ## 'Total' is the sum of weighted Daylight (2), ECFP_4 (2), MACCS (1) FPs
 ## in 2:2:1 ratio. 
 
-../../1_fp_2_compare.pairwise-mpi.py          \
+../../1_fp_2_compare.symmetric-mpi.py          \
   ../recpt.zfg19.sch_top500.pick.sdf.bz2      \
   total                                       \
   recpt.zfg19.pairwise.fp_all
