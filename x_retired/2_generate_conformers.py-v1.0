@@ -1,0 +1,84 @@
+#!/usr/bin/python
+
+##########################################################################
+#
+#   Peter M.U. Ung  @ MSSM
+#
+#   v1.0    --  15.05.15
+#
+#   Purpose:    Use RDKit's 3D conformer generator to make ligand conformers
+#               similar to OpenEye's OMEGA
+#
+#   Require:    conformers.py   a python Class file to generate conformers
+#               https://github.com/skearnes/rdkit-utils/blob/master/rdkit_utils/conformers.py
+#
+##########################################################################
+import sys
+msg = '''
+    Usage: {0}
+             -in        Ligand File: sdf, smi
+                        (gzip/bzip2 accepted)
+             -out       Output Prefix
+                        (output SDF.gz and log file)
+             -cpu       CPU for MPI: int         
+                        (number of CPU)\n
+           --Options
+             -maxconfs  Fixed number of Max. conformers to generate
+                        (default: adaptive)
+             -pool      Pool size multiplier of maxconfs
+                        (default: 1.5)
+             -ff        Forcefield [ uff | mmff94 | mmff94s ]
+                        [default: uff (Fast)]   [ mmff94 (2-3x Slow)]
+             -rmsd      RMSD cutoff for conformers to group together
+                        [default: 0.72 (uff)]   [ mmff94: 0.67 ]\n
+    e.g.:  {0}
+             -in=lig.smi.bz2 -out=output -cpu=8 -pool=2 -ff=mmff94s -thres=.67\n
+'''.format(sys.argv[0])
+if len(sys.argv) > 8 or len(sys.argv) < 4: sys.exit(msg)
+
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from rdkit.Chem.rdMolAlign import AlignMol
+from rdkit_open import *
+from conformers import ConformerGenerator
+from pathos import multiprocessing
+import tqdm
+#import multiprocessing as mpi
+#from multiprocessing import Process
+
+##########################################################################
+Argv = {'-ff':'uff', '-maxconfs':0, '-pool':1.5, '-rmsd':0.72}
+for item in sys.argv[1:]:
+  Itms = item.split('=')
+  Argv[Itms[0]] = Itms[1]
+
+##########################################################################
+mpi  = multiprocessing.Pool(processes=int(Argv['-cpu']))
+cg   = ConformerGenerator( force_field=Argv['-ff'],
+                           rmsd_threshold=float(Argv['-rmsd']),
+                           max_conformers=int(Argv['-maxconfs']),
+                           pool_multiplier=float(Argv['-pool']))
+
+Mol = rdkit_open([Argv['-in']])
+fx  = Chem.SDWriter(Argv['-out']+'.sdf')
+
+MolNm = [mol.GetProp('_Name') for mol in Mol]
+Confs = [x for x in tqdm.tqdm( mpi.imap_unordered(cg,zip(Mol,MolNm),
+                                                  total=len(zip(Mol,MolNm)))) ]
+#Confs = mpi.map(cg, zip(Mol, MolNm))
+mpi.close()
+mpi.join()
+
+for cf, name in Confs:
+
+  fo  = Chem.SDWriter('_TEMP_liggen.sdf')
+  for id in range(0, cf.GetNumConformers()):
+    fo.write(cf, confId=id)
+
+  Mol = rdkit_open(['_TEMP_liggen.sdf'])
+  for idx, m in enumerate(Mol):
+    m.SetProp('_Name', name+'_'+str(idx+1))
+    m.SetProp('Conformation', str(idx+1))
+    m.SetProp('Energy', '{0:.3f}'.format(cg.get_conformer_energies(m)[0]))
+    fx.write(m)
+

@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+
+##########################################################################
+#
+#   Peter M.U. Ung  @ MSSM
+#
+#   v1.0    --  15.05.15
+#   v2.0    --  19.03.21 - simplify sdf output
+#
+#   Purpose:    Use RDKit's 3D conformer generator to make ligand conformers
+#               similar to OpenEye's OMEGA
+#
+#   Require:    conformers_pre2018_09.py   Class file to generate conformers
+#               https://github.com/skearnes/rdkit-utils/blob/master/rdkit_utils/conformers.py
+#
+##########################################################################
+import sys,os
+msg = '''
+    Usage: {0}
+             -in        Ligand File: sdf, smi
+                        (gzip/bzip2 accepted)
+             -out       Output Prefix
+                        (output SDF.gz and log file)
+             -cpu       CPU for MPI: int         
+                        (number of CPU)\n
+           --Options
+             -maxconfs  Fixed number of Max. conformers to generate
+                        (default: adaptive)
+             -pool      Pool size multiplier of maxconfs
+                        (default: 1.5)
+             -ff        Forcefield [ uff | mmff94 | mmff94s ]
+                        [default: uff (Fast)]   [ mmff94 (2-3x Slow)]
+             -rmsd      RMSD cutoff for conformers to group together
+                        [default: 0.72 (uff)]   [ mmff94: 0.67 ]\n
+    e.g.:  {0}
+             -in=lig.smi.bz2 -out=output -cpu=8 -pool=2 -ff=mmff94s -thres=.67\n
+'''.format(sys.argv[0])
+if len(sys.argv) > 8 or len(sys.argv) < 4: sys.exit(msg)
+
+import rdkit
+from rdkit import Chem
+from rdkit import rdBase
+from rdkit.Chem import AllChem
+from rdkit.Chem.rdMolAlign import AlignMol
+from rdkit_open import *
+from conformers import ConformerGenerator
+from pathos import multiprocessing
+from tqdm import tqdm
+print('rdkit', rdBase.rdkitVersion)
+
+##########################################################################
+Argv = {'-ff':'uff', '-maxconfs':0, '-pool':1.5, '-rmsd':0.72}
+for item in sys.argv[1:]:
+  Itms = item.split('=')
+  Argv[Itms[0]] = Itms[1]
+
+##########################################################################
+def main():
+  log  = open(Argv['-out']+'.log', 'w')
+  mpi  = multiprocessing.Pool(processes=int(Argv['-cpu']))
+  cg   = ConformerGenerator( force_field=Argv['-ff'],
+                             rmsd_threshold=float(Argv['-rmsd']),
+                             max_conformers=int(Argv['-maxconfs']),
+                             pool_multiplier=float(Argv['-pool']),
+                             )
+
+  Mol = rdkit_open([Argv['-in']])
+  fx  = Chem.SDWriter(Argv['-out']+'.sdf')
+
+  MolNm = [mol.GetProp('_Name') for mol in Mol]
+  Confs = [x for x in tqdm( mpi.imap_unordered(cg, list(zip(Mol,MolNm))),
+                                total=len(list(zip(Mol,MolNm))) ) ]
+
+  num = 0
+  print('# Print results #')
+  convert = ConvertConformerResult( cg=cg, log=log )
+  for mol in [convert(conf) for conf in Confs]:
+    for z in mol:
+      num = num+1
+      fx.write(z)
+  print('# Total conformers: {}'.format(num))
+  log.write('# Total conformers: {}'.format(num))
+  log.close()
+  os.system('bzip2 {}.sdf'.format(Argv['-out']))
+
+  mpi.close()
+  mpi.join()
+
+
+##########################################################################
+class ConvertConformerResult(object):
+  def __init__( self, cg=None, log=None ):
+    self.cg  = cg
+    self.log = log
+  
+  def __call__( self, inp ):
+    return self._convert_conformer( inp )
+
+  def _convert_conformer( self, inp ):
+    cf, name = inp
+    Mols = []
+    for id in range(0, cf.GetNumConformers()):
+      m = Chem.MolFromMolBlock(Chem.MolToMolBlock(cf,confId=id),removeHs=False)
+      m.SetProp('_Name', name+'_'+str(id+1))
+      m.SetProp('Group', name)
+      m.SetProp('Conformation', str(id+1))
+      m.SetProp('Energy','{0:.3f}'.format(self.cg.get_conformer_energies(m)[0]))
+      Mols.append(m)
+
+    self.log.write('Conformer:\t{0}\t{1}\n'.format(name, len(Mols)))
+    return Mols
+
+##########################################################################
+#for cf, name in Confs:
+#  fo  = Chem.SDWriter('_TEMP.{}.sdf'.format(name))
+#  for id in range(0, cf.GetNumConformers()):
+#    fo.write(cf, confId=id)
+#  Mol = rdkit_open(['_TEMP.{}.sdf'.format(name)])
+#  for idx, m in enumerate(Mol):
+#    m.SetProp('_Name', name+'_'+str(idx+1))
+#    m.SetProp('Group', name)
+#    m.SetProp('Conformation', str(idx+1))
+#    m.SetProp('Energy', '{0:.3f}'.format(cg.get_conformer_energies(m)[0]))
+#    fx.write(m)
+
+##########################################################################
+if __name__ == '__main__':
+  main()
