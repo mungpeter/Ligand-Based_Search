@@ -63,7 +63,7 @@ result > recpt.zfg19.pairwise.fp_all.txt
 result >
 ```
 - This uses [LIGSIFT](https://doi.org/10.1093/bioinformatics/btu692) program to perform a ligand-based 3D conformer screening.
-- To a 3D structure of a query/reference molecule, screen a library of molecules' 3D conformer to find those with similar shape and chemical features. Similar idea to OpenEye's [ROCS](https://www.eyesopen.com/rocs)+[EON](https://www.eyesopen.com/eon). Will need a pre-generated 3D conformer library from either OpenEye [OMEGA](https://www.eyesopen.com/omega), Schrödinger [ConfGen](https://www.schrodinger.com/confgen) or a RDKit [ETKDG](https://doi.org/10.1021/acs.jcim.5b00654), and perhaps others (Conformator [A](https://doi.org/10.1021/acs.jcim.8b00704) [B](https://www.zbh.uni-hamburg.de/forschung/amd/software/conformator.html) , [CSD](https://doi.org/10.1021/acs.jcim.7b00697) ).
+- To a 3D structure of a query/reference molecule, screen a library of molecules' 3D conformer to find those with similar shape and chemical features. Similar idea to OpenEye's [ROCS](https://www.eyesopen.com/rocs)+[EON](https://www.eyesopen.com/eon). Will need a pre-generated 3D conformer library from either OpenEye [OMEGA](https://www.eyesopen.com/omega), Schrödinger [ConfGen](https://www.schrodinger.com/confgen) or a RDKit [ETKDG](https://doi.org/10.1021/acs.jcim.5b00654) and my [script](https://github.com/mungpeter/Structure-Based_docking/tree/master/A_docking_scripts/3_conformer_gen), and perhaps others (Conformator [A](https://doi.org/10.1021/acs.jcim.8b00704) [B](https://www.zbh.uni-hamburg.de/forschung/amd/software/conformator.html) , [CSD](https://doi.org/10.1021/acs.jcim.7b00697) ).
 
 
 #####################################
