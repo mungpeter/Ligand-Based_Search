@@ -5,8 +5,9 @@ Ligand-based searching for molecules using FingerPrint similarity
 . ECFP in principle has unlimited byte space to describe any molecule, but this unlimited space can be to vast and the Tanimoto coefficient will be lower than other FPs
 . MACCS is limited to the 166-bit public keys to describe the molecule
 - To get a good balance between the different FPs, I combine the Tanimoto coefficients of the FPs DL:ECFP_4:MACCS in a _**2:2:1**_ ratio to get a **Total** Tanimoto coefficient. In practice, it does better than any FP alone. An example would be to pick out analogs of **Sorafenib** from a set of kinase inhibitors. Any single FP will have a harder time to pick out **regorafenib** and **LS1-15**, which differ by only 1 additional Fluorine atom. **Total** coefficient on the other hand can pick them out.
- 
-> Note: RDKit uses Morgan FP, same principle as ECFP.
+
+> Note: RDKit uses Morgan FP, same principle as ECFP.<
+
 #######################################################################################
 ```
 |---- /Examples
