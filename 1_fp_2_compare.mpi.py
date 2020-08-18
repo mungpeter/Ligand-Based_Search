@@ -53,9 +53,9 @@ ms_r  = 1
 ##########################################################################
 def main( reference, queue, rank_fp, mpi_np, output ):
 
-  Ref  = RDkitRead(reference, keep_Hs=False)
+  Ref  = RDkitRead(reference, removeHs=False)
   RfNm = Ref['ID'].tolist()
-  Que  = RDkitRead(queue, keep_Hs=False)
+  Que  = RDkitRead(queue, removeHs=False)
   QuNm = Que['ID'].tolist()
   
   mpi = multiprocessing.Pool(processes = mpi_np)
@@ -141,11 +141,11 @@ class FPFunctions(object):
 
 ##########################################################################
 ## Read in SMILES or SDF input and add Hs to it
-def RDkitRead( in_file, keep_Hs=True, add_Hs=False ):
+def RDkitRead( in_file, removeHs=True, add_Hs=False ):
   ## Read in SDF file; can choose to add hydrogens or not
   if re.search(r'.sdf', in_file):
     print(' # Reading SDF')
-    df = rdpd.LoadSDF(  file_handle(in_file), removeHs=keep_Hs,
+    df = rdpd.LoadSDF(  file_handle(in_file), removeHs=removeHs,
                         smilesName='smiles', molColName='mol' )
     if add_Hs:
       df['mol'] = df.mol.apply(Chem.AddHs)

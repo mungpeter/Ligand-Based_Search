@@ -60,7 +60,7 @@ mc_r  = 1
 ##########################################################################
 def main(template, rank_fp, output):
 
-  Lib  = RDkitRead(template, keep_Hs=False)
+  Lib  = RDkitRead(template, removeHs=False)
   LbNm = Lib.ID.tolist()
   
   print(' # Working on Generating FPs for molecules: '+str(len(LbNm)))
@@ -126,11 +126,11 @@ def CombineFPs(Coeff):
 
 ##########################################################################
 ## Read in SMILES or SDF input and add Hs to it
-def RDkitRead( in_file, keep_Hs=True, add_Hs=False ):
+def RDkitRead( in_file, removeHs=True, add_Hs=False ):
   ## Read in SDF file; can choose to add hydrogens or not
   if re.search(r'.sdf', in_file):
     print(' # Reading SDF')
-    df = rdpd.LoadSDF(  file_handle(in_file), removeHs=keep_Hs,
+    df = rdpd.LoadSDF(  file_handle(in_file), removeHs=removeHs,
                         smilesName='smiles', molColName='mol' )
     if add_Hs:
       df['mol'] = df.mol.apply(Chem.AddHs)
