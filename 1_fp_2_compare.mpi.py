@@ -5,7 +5,7 @@
 ##	Peter M.U. Ung @MSSM
 ##
 ##	v1.0	- 15.05.14  based on serial 0_fp_2_compare.py
-##      v2.0    - 15.08.24  correct map_async error due to Python Update
+##  v2.0  - 15.08.24  correct map_async error due to Python Update
 ##	v3.0	- 18.02.15  optimize the fingerprint calculation step
 ##
 ##	Calculate chemical similarity coefficient of 2 sets of input molecules

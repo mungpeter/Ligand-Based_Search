@@ -9,7 +9,8 @@ msg = '''\n  {0}
 Optional:
       -rid  < >  [ SDF tag of Reference MOL (Def: ID) ]
       -qid  < >  [ SDF tag of Query MOL (Def: ID) ]
-      -coff < >  [ Cutoff to Similarity Coefficient (-rank) to save (Def: 0.25) ]
+      -save < >  [ Save number of most similar Query MOL to SDF tag (Def: 1) ]
+      -cut  < >  [ Cutoff to Similarity Coefficient (-rank) to save (Def: 0.3) ]
       -dice      [ Using *Dice* instead of *Tanimoto* for Similarity (Def: Tanimoto) ]
       -ratio <+> [ Ratio of ECFP4:Daylight:AtomPair:MACCS Weighted Average (Def: 2 2 2 1) ]\n
 e.g.> x.py -ref a.smi -que b.sdf.bz2 -rank ecfp4 -pref output -ratio 2 2 1 0 -dice\n
@@ -43,7 +44,7 @@ def main( ):
   if args.cutoff:
     cutoff = float(args.cutoff)
   else:
-    cutoff = 0.25
+    cutoff = 0.33
   if args.rid:
     r_id = args.rid
   else:
@@ -61,6 +62,10 @@ def main( ):
     coeff = DiceSimilarity
   else:
     coeff = TanimotoSimilarity
+  if args.save:
+    save_num = int(args.save)
+  else:
+    save_num = 1
 
 ##########################
 
@@ -78,14 +83,13 @@ def main( ):
   Que['maccs'] = Que.mol.apply(lambda m:MACCSkeys.GenMACCSKeys(m))
 
   ## Calculate Similarity Coefficient
-  df_list, df_tops = [], []
+  df_list = []
   for idx, row in tqdm(Ref.iterrows(), total=len(Ref)):
     FPCalc = FPDistCalculator(ref_ec=row.ecfp4, ref_dl=row.dl, ref_ap=row.apair, 
                               ref_ms=row.maccs, ref_sm=row.smiles, ref_id=row[r_id],
                               que_id=q_id, fp_r=fp_ratio, coeff=coeff )
     Ranked = FPCalc(Que).sort_values(by=[args.rank_fp], ascending=False)
     df_list.append(Ranked)
-    df_tops.append(Ranked[0:1])
 
 
   ## summarize and output similarity between Ref and Query mol
@@ -95,15 +99,16 @@ def main( ):
   all_df.to_csv(args.output+'.txt', sep='\t', float_format='%.3f', index=False)
 
   ## put most similar Ref smiles into Query mol
-  top_df = pd.concat(df_tops).reset_index(drop=True)
-  Ref['check_ref_id']= top_df['ref_id']
-  Ref['top_que_id']  = top_df['que_id']
-  Ref['top_que_ec4'] = top_df['ecfp4']
-  Ref['top_que_dl']  = top_df['dl']
-  Ref['top_que_ap']  = top_df['apair']
-  Ref['top_que_ms']  = top_df['maccs']
-  Ref['top_que_wavg']= top_df['wavg']
-  Ref['top_que_smiles'] = top_df['que_smi']
+  for i in range(save_num):
+    top_df = pd.concat([ df[i:i+1] for df in df_list ]).reset_index(drop=True)
+    Ref['check_ref_id_{0}'.format(i+1)] = top_df['ref_id']
+    Ref['top{0}_que_id'.format(i+1)]    = top_df['que_id']
+    Ref['top{0}_que_ec4'.format(i+1)]   = top_df['ecfp4']
+    Ref['top{0}_que_dl'.format(i+1)]    = top_df['dl']
+    Ref['top{0}_que_ap'.format(i+1)]    = top_df['apair']
+    Ref['top{0}_que_ms'.format(i+1)]    = top_df['maccs']
+    Ref['top{0}_que_wavg'.format(i+1)]  = top_df['wavg']
+    Ref['top{0}_que_smiles'.format(i+1)]= top_df['que_smi']
   Ref.drop(columns=['ecfp4','dl','apair','maccs'], inplace=True)
   rdpd.WriteSDF(Ref, args.output+'.sdf.gz', molColName='mol', properties=list(Ref.columns))
 
@@ -212,8 +217,10 @@ def UserInput():
                   help='Optional: SDF tag of Reference MOL identifier (Def: ID)')
   p.add_argument('-qid', dest='qid', required=False,
                   help='Optional: SDF tag of Query MOL identifier (Def: ID)')
-  p.add_argument('-coff', dest='cutoff', required=False,
-                  help='Optional: Cutoff to Similarity Coefficient (use -rank) to save (Def: 0.25)')
+  p.add_argument('-save', dest='save', required=False,
+                  help='Optional: Save number of most similar Query MOL to SDF tag (Def: 1)')
+  p.add_argument('-cut', dest='cutoff', required=False,
+                  help='Optional: Cutoff to Similarity Coefficient (use -rank) to save (Def: 0.33)')
   p.add_argument('-dice', dest='dice', required=False, action='store_true',
                   help='Optional: Using *Dice* instead of *Tanimoto* for Similarity (Def: Tanimoto)')
   p.add_argument('-coeff', dest='coeff', required=False,
@@ -235,7 +242,7 @@ if __name__ == '__main__':
 ##
 ##  *OLD* version using MPI: 1_fp_2_compare.mpi.py
 
-##  v1.0  - 20.09.19  modernize with rdkit PandasTools
+##  v1.0  - 20.09.20  modernize with rdkit PandasTools
 
 ##	Calculate chemical similarity coefficient of 2 sets of input molecules
 ##	Takes gzip files of both SDF (.sdf) and SMILES (.smi) formats.
