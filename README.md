@@ -37,9 +37,11 @@ e.g.> x.py -ref a.smi -que b.sdf.bz2 -rank ecfp4 -pref output -ratio 2 2 1 0 -di
 ```
 - Calculate chemical similarity coefficient of 2 sets of input molecules. Takes gzip files of both SDF (.sdf) and SMILES (.smi) formats.
 - This version uses **single-cpu + Pandas** to calculate fp similarity. For comparison, a 767x850 pairwise set:
-```  2-cpu mpi-only version: ~ 170s (4 FPs)
+```
+  2-cpu mpi-only version: ~ 170s (4 FPs)
   8-cpu mpi-only version: ~ 145s (4 FPs)
-  1-cpu Pandas version:   ~  40s (4 FPs)```
+  1-cpu Pandas version:   ~  40s (4 FPs)
+```
 - **MPI-only** is simply inefficient for this type of *many-small-but-fast* job. *Overhead* to create the many processes is too much.
 
 -  *Dask* is **mpi-cpu + Pandas** but also not good for this job. partitions=2 is ~6x slower than single-cpu; partitions=8 is ~10x slower! Probably has to do with number of small and fast jobs to perform where mpi overhead is too costly for this type of job. For dask, need to do: x.apply(x, meta=pd.Series(dtype='int',column='ecfp4'))
