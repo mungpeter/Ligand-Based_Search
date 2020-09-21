@@ -46,7 +46,7 @@ e.g.> x.py -ref a.smi -que b.sdf.bz2 -rank ecfp4 -pref output -ratio 2 2 1 0 -di
 
 -  *Dask* is **mpi-cpu + Pandas** but also not good for this job. partitions=2 is ~6x slower than single-cpu; partitions=8 is ~10x slower! Probably has to do with number of small and fast jobs to perform where mpi overhead is too costly for this type of job. For dask, need to do: x.apply(x, meta=pd.Series(dtype='int',column='ecfp4'))
 
-- Return output files: **<prefix>.txt** = pairwise query-reference similarity coeff ; **<prefix>.sdf.gz** = 1 closest query molecule for each reference molecule
+- Return output files: **prefix.txt** = pairwise query-reference similarity coeff ; **prefix.sdf.gz** = 1 closest query molecule for each reference molecule
 
 ```
 > 1_fp_2_compare.mpi.py
