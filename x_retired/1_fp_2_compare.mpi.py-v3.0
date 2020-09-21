@@ -38,18 +38,16 @@ from rdkit import Chem
 from rdkit import DataStructs
 from rdkit.Chem import AllChem
 from rdkit.Chem import MACCSkeys
-from rdkit.Chem.AtomPairs import Pairs
 from rdkit.Chem import PandasTools as rdpd
 from rdkit.Chem.Fingerprints import FingerprintMols
 
 from tqdm import tqdm
 from pathos import multiprocessing
 
-Cols  = {'ecfp4':2, 'dl':3, 'apair':4, 'maccs':5, 'total':6}
-Title = ['#id','ref','ECFP4','DL','APair','MACCS','Sum','SMILES']
+Cols  = {'ecfp4':2, 'dl':3, 'maccs':4, 'total':5}
+Title = ['#id','ref','ECFP4','DL','MACCS','Sum','SMILES']
 dl_r  = 2
 ec_r  = 2
-ap_r  = 2
 ms_r  = 1
 
 ##########################################################################
@@ -62,20 +60,27 @@ def main( reference, queue, rank_fp, mpi_np, output ):
   
   mpi = multiprocessing.Pool(processes = mpi_np)
   ## Generate fingerprints for all inputs
-#  Rfp = [x for x in tqdm( mpi.imap( GenerateFPs, list(zip(Ref.mol.tolist(), RfNm))),
-#                              total=len(list(RfNm)) ) ]
-#  Qfp = [x for x in tqdm( mpi.imap( GenerateFPs, list(zip(Que.mol.tolist(), QuNm))), 
-#                              total=len(list(QuNm)) ) ]
-  Rfp = mpi.map( GenerateFPs, list(zip(Ref.mol.tolist(), RfNm)) )
-  Qfp = mpi.map( GenerateFPs, list(zip(Que.mol.tolist(), QuNm)) )
+  Rfp = [x for x in tqdm( mpi.imap_unordered(
+                              GenerateFPs, list(zip(Ref.mol.tolist(), RfNm))),
+                              total=len(list(RfNm)) ) ]
+  Qfp = [x for x in tqdm( mpi.imap_unordered(
+                              GenerateFPs, list(zip(Que.mol.tolist(), QuNm))), 
+                              total=len(list(QuNm)) ) ]
+#  Rfp = mpi.map( GenerateFPs, list(zip(Ref.mol.tolist(), RfNm)) )
+#  Qfp = mpi.map( GenerateFPs, list(zip(Que.mol.tolist(), QuNm)) )
+  mpi.close()
+  mpi.join()
 
-  idx = len(Rfp)
-  for ref in tqdm( Rfp ):
+  for idx, ref in enumerate( Rfp ):
+    mpi = multiprocessing.Pool(processes = mpi_np)
 
-#    print(' # Working on reference molecule: '+ref[1])
-#    print('  > {0}'.format(Chem.MolToSmiles(ref[0])))
+    print(' # Working on reference molecule: '+ref[1])
+    print('  > {0}'.format(Chem.MolToSmiles(ref[0])))
 #    pRef = FPFunctions()     # Calculate reference fp only once
-    pLib = FPFunctions( ref_id = ref[1], ref_fp = ref[2:] )
+    pLib = FPFunctions(
+             ref_id = ref[1],
+             ref_fp = ref[2:] )
+    print( '   Calculating fingerprint Tanimoto Coefficient')
 
     ## Load Lib after creating the CompareMolFingerprints object to avoid 
     ## duplication of memory use, otherwise for N processors to run MPI, 
@@ -86,8 +91,10 @@ def main( reference, queue, rank_fp, mpi_np, output ):
     #  need to be extracted and supplied to the MPI process alongside with
     #  the list of mol objects thru ZIP function.
 
-#    Data = [x for x in tqdm(mpi.imap(pLib, Qfp),total=len(Qfp))]
-    Data = mpi.map(pLib, Qfp)
+    Data = [x for x in tqdm(mpi.imap_unordered(pLib, Qfp),total=len(Qfp))]
+#    Data = mpi.map(pLib, Qfp)
+    mpi.close()
+    mpi.join()
 
     ## Use Pandas to print result file
     Rank = sorted(Data, key=lambda x: x[Cols[rank_fp]], reverse=True)
@@ -98,9 +105,6 @@ def main( reference, queue, rank_fp, mpi_np, output ):
       df.to_csv(output+'.txt', sep='\t', float_format='%.3f',
                 index=False, mode='a')
  
-  mpi.close()
-  mpi.join()
-
 
 ##########################################################################
 def GenerateFPs( inp ):
@@ -108,7 +112,6 @@ def GenerateFPs( inp ):
   return [ mol, name,
            AllChem.GetMorganFingerprintAsBitVect(mol, 2, 2048),
            FingerprintMols.FingerprintMol(mol),
-           Pairs.GetAtomPairFingerprintAsBitVect(mol),
            MACCSkeys.GenMACCSKeys(mol) ]
 
 ##########################################################################
@@ -128,10 +131,10 @@ class FPFunctions(object):
     que_sm = Chem.MolToSmiles(que)
 
     Tc = [ DataStructs.FingerprintSimilarity(self.ref_fp[x], que_fp[x])
-              for x in range(4) ]
+              for x in range(3) ]
 
-    Data  = [ que_id, self.ref_id, Tc[0], Tc[1], Tc[2], Tc[3],
-              ( Tc[0]*dl_r + Tc[1]*ec_r + Tc[2]*ap_r + Tc[3]*ms_r )/(dl_r + ec_r + ap_r + ms_r),
+    Data  = [ que_id, self.ref_id, Tc[0], Tc[1], Tc[2], 
+              ( Tc[0]*dl_r + Tc[1]*ec_r + Tc[2]*ms_r )/(dl_r + ec_r + ms_r),
               que_sm ]
     return Data
 
@@ -143,8 +146,7 @@ def RDkitRead( in_file, removeHs=True, add_Hs=False ):
   if re.search(r'.sdf', in_file):
     print(' # Reading SDF')
     df = rdpd.LoadSDF(  file_handle(in_file), removeHs=removeHs,
-                        idName='ID', molColName='mol' )
-    df['smiles'] = df.mol.apply(lambda m:Chem.MolToSmiles(Chem.RemoveHs(m)))
+                        smilesName='smiles', molColName='mol' )
     if add_Hs:
       df['mol'] = df.mol.apply(Chem.AddHs)
 
@@ -153,15 +155,14 @@ def RDkitRead( in_file, removeHs=True, add_Hs=False ):
     print('# Reading SMI')
     with file_handle(in_file) as fi:
       if re.search('smi', str(fi.readline()), re.IGNORECASE):
-        print(' # Smiles input has Header #\n')
+        print('\n # Smiles input has Header #\n')
         df = pd.read_csv(in_file, sep='\s+', comment='#').dropna()
         df.columns = ['smiles','ID']
       else:
-        print(' # Smiles input has NO Header #\n')
+        print('\n # Smiles input has NO Header #\n')
         df = pd.read_csv(in_file, header=None, sep='\s+', comment='#').dropna()
         df.columns = ['smiles','ID']
-    rdpd.AddMoleculeColumnToFrame(df, smilesCol='smiles', molCol='mol')
-    df['smiles'] = df.mol.apply(Chem.MolToSmiles)
+    df['mol'] = df.smiles.apply(Chem.MolFromSmiles)
 
   print('## Number of MOL read from {}: {}\n'.format(in_file,len(df.smiles)))
   return df
