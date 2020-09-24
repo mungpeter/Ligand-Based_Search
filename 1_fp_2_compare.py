@@ -12,9 +12,14 @@ Optional:
       -save < >  [ Save number of most similar Query MOL to SDF tag (Def: 1) ]
       -cut  < >  [ Cutoff to Similarity Coefficient (-rank) to save (Def: 0.3) ]
       -dice      [ Using *Dice* instead of *Tanimoto* for Similarity (Def: Tanimoto) ]
-      -ratio <+> [ Ratio of ECFP4:Daylight:AtomPair:MACCS Weighted Average (Def: 2 2 2 1) ]\n
+      -ratio <+> [ Ratio of ECFP4:Daylight:AtomPairs:MACCS Weighted Average (Def: 2 2 2 1) ]\n
 e.g.> x.py -ref a.smi -que b.sdf.bz2 -rank ecfp4 -pref output -ratio 2 2 1 0 -dice\n
-      return: output.txt (all scores); output.sdf.gz (new tag to -ref)\n'''.format(sys.argv[0])
+      return: output.txt (all scores); output.sdf.gz (new tag to -ref)\n
+  # For congeneric series with very high similarity, AtomPairs alone seems to give
+    the highest correlation between similar pairs and ranking (use -ratio 0 0 1 0).
+  # Dice similarity coefficient is more appropriate for congeneric series according
+    to Greg Landrum (RDkit UGM 2012, UK), where counting no. of times a feature
+    appears instead of simply that it appears is more informative.\n'''.format(sys.argv[0])
 if len(sys.argv) < 5: sys.exit(msg)
 
 import re
@@ -34,7 +39,7 @@ from rdkit.Chem.Fingerprints import FingerprintMols
 from tqdm import tqdm
 from argparse import ArgumentParser
 
-Title = ['Query','Ref','ECFP4','DL','APair','MACCS','W_Avg','Query_smi','Ref_smi']
+Title = ['Ref','Query','ECFP4','DL','APair','MACCS','W_Avg','Ref_smi','Query_smi']
 fp_list = ['ecfp4','dl','apair','maccs']
 
 ##########################################################################
@@ -96,7 +101,7 @@ def main( ):
   all_df = pd.concat(df_list).reset_index(drop=True)
   all_df = all_df[all_df[args.rank_fp] >= cutoff]
   all_df.columns = Title
-  all_df.to_csv(args.output+'.txt', sep='\t', float_format='%.3f', index=False)
+  all_df.to_csv(args.output+'.txt.bz2', sep='\t', float_format='%.3f', index=False)
 
   ## put most similar Ref smiles into Query mol
   for i in range(save_num):
@@ -140,8 +145,8 @@ class FPDistCalculator(object):
   ## "metric=DataStructs.DiceSimilarity" into FingerprintSimilarity()
   def CompareFPs( self, Query ):
     df = pd.DataFrame(columns=['_x'], index=list(range(len(Query))))
-    df['que_id'] = Query[self.que_id]
     df['ref_id'] = self.ref_id
+    df['que_id'] = Query[self.que_id]
     df['ecfp4']  = Query.ecfp4.apply(lambda m: FingerprintSimilarity(self.ref_ec, m, metric=self.coeff))
     df['dl']     = Query.dl.apply(   lambda m: FingerprintSimilarity(self.ref_dl, m, metric=self.coeff))
     df['apair']  = Query.apair.apply(lambda m: FingerprintSimilarity(self.ref_ap, m, metric=self.coeff))
@@ -247,6 +252,14 @@ if __name__ == '__main__':
 ##	Calculate chemical similarity coefficient of 2 sets of input molecules
 ##	Takes gzip files of both SDF (.sdf) and SMILES (.smi) formats.
 ##	Files can contain multiple molecules.
+
+##  For congeneric series with very high similarity, AtomPairs alone seems to give
+##  the highest correlation between similar pairs and ranking (use -ratio 0 0 1 0).
+##  For diverse compounds, mixed ratio of (2221) seems to work better.
+
+##  Dice similarity coefficient is more appropriate for congeneric series according
+##  to Greg Landrum (RDkit UGM 2012, UK), where counting no. of times a feature
+##  appears instead of simply that it appears is more informative.
 
 ##	This version uses single-cpu + Pandas to calculate fp similarity.
 ##  For comparison, a 767x850 pairwise set:

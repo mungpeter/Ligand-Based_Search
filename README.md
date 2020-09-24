@@ -1,13 +1,17 @@
 # Ligand-Based_Search
 Ligand-based searching for molecules using FingerPrint similarity
 
-- Molecules can be described by the chemical Fingerprints and these fingerprints can be compared with each other to calculate Tanimoto coefficient (standard) or other newer coefficients (e.g. Dice). Three commonly used Fingerprints availble in [RDKit](https://www.rdkit.org/UGM/2012/Landrum_RDKit_UGM.Fingerprints.Final.pptx.pdf): DayLight (dl), ECFP_4 (ecfp4), and 166-bit MACCS key (maccs). However, each fingerprint has it strengths and weaknesses:
+- Molecules can be described by the chemical Fingerprints and these fingerprints can be compared with each other to calculate Tanimoto coefficient (standard) or other newer coefficients (e.g. Dice). Three commonly used Fingerprints availble in [RDKit](https://www.rdkit.org/UGM/2012/Landrum_RDKit_UGM.Fingerprints.Final.pptx.pdf): DayLight (dl), ECFP_4 (ecfp4), Atom Pairs (apair), and 166-bit MACCS key (maccs). However, each fingerprint has it strengths and weaknesses:
 1. ECFP in principle has unlimited byte space to describe any molecule, but this unlimited space can be to vast and the Tanimoto coefficient will be lower than other FPs
-2. MACCS is limited to the 166-bit public keys to describe the molecule
+2. Atom Pairs appears to perform best for highly similar congeneic series where the core scaffold stays the same.
+3. MACCS is limited to the 166-bit public keys to describe the molecule
 
-- To get a good balance between the different FPs, I combine the Tanimoto coefficients of the FPs DL:ECFP_4:MACCS in a _**2:2:1**_ ratio to get a **Total** Tanimoto coefficient. In practice, it does better than any FP alone. An example would be to pick out analogs of **Sorafenib** from a set of kinase inhibitors. Any single FP will have a harder time to pick out **regorafenib** and **LS1-15**, which differ by only 1 additional Fluorine atom. **Total** coefficient on the other hand can pick them out.
+- To get a good balance between the different FPs for general use (more diverse compounds), I combine the Tanimoto coefficients of the FPs ECFP4:DL:APAIR:MACCS in a _**2:2:2:1**_ ratio to get a **Total** Tanimoto coefficient. In practice, it does better than any FP alone. An example would be to pick out analogs of **Sorafenib** from a set of kinase inhibitors. Any single FP will have a harder time to pick out **regorafenib** and **LS1-15**, which differ by only 1 additional Fluorine atom. **Total** coefficient on the other hand can pick them out.
 
-> Note: RDKit uses Morgan FP, same principle as ECFP.<
+- For congeneric series with very high similarity, AtomPairs alone seems to give the highest correlation between similar pairs and ranking (use -ratio 0 0 1 0).
+- Dice similarity coefficient is more appropriate for congeneric series according to Greg Landrum (RDkit UGM 2012, UK), where counting no. of times a feature appears instead of simply that it appears is more informative.
+
+> Note: RDKit uses Morgan FP, same principle as ECFP. Its RDKit FP is similar to Daylight FP.<
 
 #######################################################################################
 - Folder structure
@@ -34,6 +38,12 @@ Optional:
 
 e.g.> x.py -ref a.smi -que b.sdf.bz2 -rank ecfp4 -pref output -ratio 2 2 1 0 -dice
       return: output.txt (all scores); output.sdf.gz (new tag to -ref)
+
+  # For congeneric series with very high similarity, AtomPairs alone seems to give
+    the highest correlation between similar pairs and ranking (use -ratio 0 0 1 0).
+  # Dice similarity coefficient is more appropriate for congeneric series according
+    to Greg Landrum (RDkit UGM 2012, UK), where counting no. of times a feature
+    appears instead of simply that it appears is more informative.
 ```
 - Calculate chemical similarity coefficient of 2 sets of input molecules. Takes gzip files of both SDF (.sdf) and SMILES (.smi) formats.
 - This version uses **single-cpu + Pandas** to calculate fp similarity. For comparison, a 767x850 pairwise set:
