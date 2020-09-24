@@ -1,7 +1,7 @@
 # Ligand-Based_Search
 Ligand-based searching for molecules using FingerPrint similarity
 
-- Molecules can be described by the chemical Fingerprints and these fingerprints can be compared with each other to calculate Tanimoto coefficient (standard) or other newer coefficients (e.g. Dice). Three commonly used Fingerprints availble in [RDKit](https://www.rdkit.org/UGM/2012/Landrum_RDKit_UGM.Fingerprints.Final.pptx.pdf): DayLight (dl), ECFP_4 (ecfp4), Atom Pairs (apair), and 166-bit MACCS key (maccs). However, each fingerprint has it strengths and weaknesses:
+- Molecules can be described by the chemical Fingerprints and these fingerprints can be compared with each other to calculate Tanimoto coefficient (standard) or other newer coefficients (e.g. Dice). Three commonly used Fingerprints availble in [RDKit](https://github.com/mungpeter/Ligand-Based_Search/blob/master/Landrum_RDKit_UGM.Fingerprints.Final.pptx.pdf): DayLight (dl), ECFP_4 (ecfp4), Atom Pairs (apair), and 166-bit MACCS key (maccs). However, each fingerprint has it strengths and weaknesses:
 1. ECFP in principle has unlimited byte space to describe any molecule, but this unlimited space can be to vast and the Tanimoto coefficient will be lower than other FPs
 2. Atom Pairs appears to perform best for highly similar congeneic series where the core scaffold stays the same.
 3. MACCS is limited to the 166-bit public keys to describe the molecule
