@@ -33,8 +33,9 @@ Optional:
       -rid  < >  [ SDF tag of Reference MOL (Def: ID) ]
       -qid  < >  [ SDF tag of Query MOL (Def: ID) ]
       -coff < >  [ Cutoff to Similarity Coefficient (-rank) to save (Def: 0.25) ]
+      -ratio <+> [ Ratio of ECFP4:Daylight:AtomPairs:MACCS Weighted Average (Def: 2 2 2 1) ]
       -dice      [ Using *Dice* instead of *Tanimoto* for Similarity (Def: Tanimoto) ]
-      -ratio <+> [ Ratio of ECFP4:Daylight:AtomPair:MACCS Weighted Average (Def: 2 2 2 1) ]
+      -index     [ Include order of Reference/Query MOL as SDF tag (Def: False) ]
 
 e.g.> x.py -ref a.smi -que b.sdf.bz2 -rank ecfp4 -pref output -ratio 2 2 1 0 -dice
       return: output.txt (all scores); output.sdf.gz (new tag to -ref)

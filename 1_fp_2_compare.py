@@ -11,8 +11,9 @@ Optional:
       -qid  < >  [ SDF tag of Query MOL (Def: ID) ]
       -save < >  [ Save number of most similar Query MOL to SDF tag (Def: 1) ]
       -cut  < >  [ Cutoff to Similarity Coefficient (-rank) to save (Def: 0.3) ]
+      -ratio <+> [ Ratio of ECFP4:Daylight:AtomPairs:MACCS Weighted Average (Def: 2 2 2 1) ]
       -dice      [ Using *Dice* instead of *Tanimoto* for Similarity (Def: Tanimoto) ]
-      -ratio <+> [ Ratio of ECFP4:Daylight:AtomPairs:MACCS Weighted Average (Def: 2 2 2 1) ]\n
+      -count     [ Include order of Reference/Query MOL as SDF tag (Def: False) ]\n
 e.g.> x.py -ref a.smi -que b.sdf.bz2 -rank ecfp4 -pref output -ratio 2 2 1 0 -dice\n
       return: output.txt (all scores); output.sdf.gz (new tag to -ref)\n
   # For congeneric series with very high similarity, AtomPairs alone seems to give
@@ -39,7 +40,7 @@ from rdkit.Chem.Fingerprints import FingerprintMols
 from tqdm import tqdm
 from argparse import ArgumentParser
 
-Title = ['Ref','Query','ECFP4','DL','APair','MACCS','W_Avg','Ref_smi','Query_smi']
+Title = ['Ref','Query','ECFP4','DL','APair','MACCS','W_Avg','Ref_Order','Ref_smi','Query_Order','Query_smi']
 fp_list = ['ecfp4','dl','apair','maccs']
 
 ##########################################################################
@@ -87,12 +88,20 @@ def main( ):
   Que['dl']    = Que.mol.apply(lambda m:FingerprintMols.FingerprintMol(m))
   Que['maccs'] = Que.mol.apply(lambda m:MACCSkeys.GenMACCSKeys(m))
 
+  ## Include order of Ref/Query MOL as SDF tag
+  if args.count:
+    Ref['ref_order'] = list(range(1,len(Ref)+1))
+    Que['que_order'] = list(range(1,len(Que)+1))
+  else:
+    Ref['ref_order'] = ''
+    Que['que_order'] = ''
+
   ## Calculate Similarity Coefficient
   df_list = []
   for idx, row in tqdm(Ref.iterrows(), total=len(Ref)):
     FPCalc = FPDistCalculator(ref_ec=row.ecfp4, ref_dl=row.dl, ref_ap=row.apair, 
                               ref_ms=row.maccs, ref_sm=row.smiles, ref_id=row[r_id],
-                              que_id=q_id, fp_r=fp_ratio, coeff=coeff )
+                              que_id=q_id, fp_r=fp_ratio, coeff=coeff, count=row.ref_order )
     Ranked = FPCalc(Que).sort_values(by=[args.rank_fp], ascending=False)
     df_list.append(Ranked)
 
@@ -107,13 +116,14 @@ def main( ):
   for i in range(save_num):
     top_df = pd.concat([ df[i:i+1] for df in df_list ]).reset_index(drop=True)
     Ref['check_ref_id_{0}'.format(i+1)] = top_df['ref_id']
+    Ref['top{0}_que_smiles'.format(i+1)]= top_df['que_smi']
     Ref['top{0}_que_id'.format(i+1)]    = top_df['que_id']
+    Ref['top{0}_que_ord'.format(i+1)]    = top_df['que_order']
     Ref['top{0}_que_ec4'.format(i+1)]   = top_df['ecfp4']
     Ref['top{0}_que_dl'.format(i+1)]    = top_df['dl']
     Ref['top{0}_que_ap'.format(i+1)]    = top_df['apair']
     Ref['top{0}_que_ms'.format(i+1)]    = top_df['maccs']
     Ref['top{0}_que_wavg'.format(i+1)]  = top_df['wavg']
-    Ref['top{0}_que_smiles'.format(i+1)]= top_df['que_smi']
   Ref.drop(columns=['ecfp4','dl','apair','maccs'], inplace=True)
   rdpd.WriteSDF(Ref, args.output+'.sdf.gz', molColName='mol', properties=list(Ref.columns))
 
@@ -122,7 +132,7 @@ def main( ):
 ## Calculate Similarity Coefficient for different FPs and their weighted average
 class FPDistCalculator(object):
   def __init__( self, ref_ec='', ref_dl='', ref_ap='', ref_ms='', ref_sm='',
-                      ref_id='', que_id='', fp_r=[],   coeff=''  ):
+                      ref_id='', que_id='', fp_r=[],   coeff='',  count=''  ):
     self.ref_ec = ref_ec  # reference fp: ecfp4
     self.ref_dl = ref_dl  # reference fp: daylight
     self.ref_ap = ref_ap  # reference fp: atom pairs
@@ -132,6 +142,7 @@ class FPDistCalculator(object):
     self.que_id = que_id  # query ID column name
     self.fp_r   = fp_r    # ratio of fps
     self.coeff  = coeff   # similarity coefficient function
+    self.count  = count   # show the order of MOL in number
 
   def __call__( self, Query ):
     return self.CompareFPs(Query)
@@ -152,8 +163,10 @@ class FPDistCalculator(object):
     df['apair']  = Query.apair.apply(lambda m: FingerprintSimilarity(self.ref_ap, m, metric=self.coeff))
     df['maccs']  = Query.maccs.apply(lambda m: FingerprintSimilarity(self.ref_ms, m, metric=self.coeff))
     df['wavg']   = self._weighted_avg(df.ecfp4, df.dl, df.apair, df.maccs)
-    df['que_smi']= Query.smiles
-    df['ref_smi']= self.ref_sm
+    df['ref_order'] = self.count
+    df['ref_smi']   = self.ref_sm
+    df['que_order'] = Query.que_order
+    df['que_smi']   = Query.smiles
     df.drop(columns=['_x'], inplace=True)
     return df
 
@@ -228,10 +241,12 @@ def UserInput():
                   help='Optional: Cutoff to Similarity Coefficient (use -rank) to save (Def: 0.33)')
   p.add_argument('-dice', dest='dice', required=False, action='store_true',
                   help='Optional: Using *Dice* instead of *Tanimoto* for Similarity (Def: Tanimoto)')
-  p.add_argument('-coeff', dest='coeff', required=False,
-                  help='Optional: Cutoff to Tanimoto Coefficient to save (use -rank)')
   p.add_argument('-ratio', dest='ratio', required=False, nargs='+',
                   help='Optional: Ratio of ecfp4:dl:apair:maccs Tc average (Def: 2 2 2 1)')
+  p.add_argument('-coeff', dest='coeff', required=False,
+                  help='Optional: Cutoff to Tanimoto Coefficient to save (use -rank)')
+  p.add_argument('-count', dest='count', required=False, action='store_true',
+                  help='Optional: Include order of Ref/Query MOL as SDF tag (Def: False)')
 
   return p.parse_args()
 
