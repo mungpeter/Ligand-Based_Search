@@ -4,22 +4,22 @@ import sys
 msg = '''\n  {0}
 \033[35m    -ref  < >  \033[0m[ Reference MOL ]   (.smi, .sdf ok; gzip,bzip2 ok)
 \033[35m    -que  < >  \033[0m[ Query MOL ]  
-\033[35m    -rank < >  \033[0m[ Rank mol with Fingerprint: str ] (mhfp6, ecfp4, dl, apair, maccs, wavg)
+\033[35m    -rank < >  \033[0m[ Rank mol with Fingerprint: str ] (ecfp4, dl, apair, maccs, wavg)
 \033[35m    -pref < >  \033[0m[ Output Prefix ]\n
 \033[31mOptional:\033[0m
 \033[35m    -rid  < >  \033[0m[ SDF tag of Reference MOL (Def: ID) ]
 \033[35m    -qid  < >  \033[0m[ SDF tag of Query MOL (Def: ID) ]
 \033[35m    -save < >  \033[0m[ Save number of most similar Query MOL to SDF tag (Def: 1) ]
 \033[35m    -cut  < >  \033[0m[ Cutoff to Similarity Coefficient (-rank) to save (Def: 0.33) ]
-\033[35m    -ratio <+> \033[0m[ Ratio of MHFP6:ECFP4:Daylight:AtomPairs:MACCS Weighted Average (Def: 2 2 2 2 1) ]
+\033[35m    -ratio <+> \033[0m[ Ratio of ECFP4:Daylight:AtomPairs:MACCS Weighted Average (Def: 2 2 2 1) ]
 \033[35m    -dice      \033[0m[ Using *Dice* instead of *Tanimoto* for Similarity (Def: Tanimoto) ]
 \033[35m    -count     \033[0m[ Include order of Reference/Query MOL as SDF tag (Def: False) ]\n
 e.g.> x.py -ref a.smi -que b.sdf.bz2 -rank ecfp4 -pref output 
-           -ratio 2 2 2 1 0 -dice\n
+           -ratio 2 2 1 0 -dice\n
       return: output.txt (all scores); output.sdf.gz (new tag to -ref)\n
   # For congeneric series with very high similarity, AtomPairs alone seems
     to give the highest correlation between similar pairs and ranking 
-    (use -ratio 0 0 0 1 0).
+    (use -ratio 0 0 1 0).
   # Dice similarity coefficient is more appropriate for congeneric series
     according to Greg Landrum (RDkit UGM 2012, UK), where counting no. of 
     times a feature appears instead of simply that it appears is more 
@@ -35,7 +35,6 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import MACCSkeys
 from rdkit.Chem.AtomPairs import Pairs
-from rdkit.Chem import rdMHFPFingerprint
 from rdkit.Chem import PandasTools as rdpd
 from rdkit.DataStructs import DiceSimilarity
 from rdkit.DataStructs import TanimotoSimilarity
@@ -55,7 +54,7 @@ def main( ):
   cutoff = float(args.cutoff)
   r_id = args.rid
   q_id = args.qid
-  ## fp_ratio is ordered: [ mhfp6, ecfp4, daylight, atom-pairs, maccs ] 
+  ## fp_ratio is ordered: [ ecfp4, daylight, atom-pairs, maccs ] 
   fp_ratio = list(map(float, args.ratio))
   save_num = int(args.save)
 
@@ -67,26 +66,25 @@ def main( ):
 ##########################
 
   ## Import data and calculate FPs
-  mhfp_obj = rdMHFPFingerprint.MHFPEncoder(2048)
-  Ref_fp = InitialData(args.reference, mhfp_obj)
-  Que_fp = InitialData(args.query, mhfp_obj)
+  Ref = InitialData(args.reference)
+  Que = InitialData(args.query)
 
   ## Include order of Ref/Query MOL as SDF tag
   if args.count:
-    Ref_fp['ref_order'] = list(range(1,len(Ref_fp)+1))
-    Que_fp['que_order'] = list(range(1,len(Que_fp)+1))
+    Ref['ref_order'] = list(range(1,len(Ref)+1))
+    Que['que_order'] = list(range(1,len(Que)+1))
   else:
-    Ref_fp['ref_order'] = ''
-    Que_fp['que_order'] = ''
+    Ref['ref_order'] = ''
+    Que['que_order'] = ''
 
   ## Calculate Similarity Coefficient
   df_list = []
-  for idx, row in tqdm(Ref_fp.iterrows(), total=len(Ref_fp)):
+  for idx, row in tqdm(Ref.iterrows(), total=len(Ref)):
     FPCalc = FPDistCalculator(
-        ref_mh=row.mhfp6, ref_ec=row.ecfp4, ref_dl=row.dl, ref_ap=row.apair, 
-        ref_ms=row.maccs, ref_sm=row.smiles, ref_id=row[r_id], mh_obj=mhfp_obj,
+        ref_ec=row.ecfp4, ref_dl=row.dl, ref_ap=row.apair, 
+        ref_ms=row.maccs, ref_sm=row.smiles, ref_id=row[r_id],
         que_id=q_id, fp_r=fp_ratio, coeff=coeff, count=row.ref_order )
-    Ranked = FPCalc(Que_fp).sort_values(by=[args.rank_fp], ascending=False)
+    Ranked = FPCalc(Que).sort_values(by=[args.rank_fp], ascending=False)
     df_list.append(Ranked)
 
 
@@ -102,35 +100,32 @@ def main( ):
     Ref['check_ref_id_{0}'.format(i+1)] = top_df['ref_id']
     Ref['top{0}_que_smiles'.format(i+1)]= top_df['que_smi']
     Ref['top{0}_que_id'.format(i+1)]    = top_df['que_id']
-    Ref['top{0}_que_ord'.format(i+1)]   = top_df['que_order']
-    Ref['top{0}_que_mh6'.format(i+1)]   = top_df['mhfp6']
+    Ref['top{0}_que_ord'.format(i+1)]    = top_df['que_order']
     Ref['top{0}_que_ec4'.format(i+1)]   = top_df['ecfp4']
     Ref['top{0}_que_dl'.format(i+1)]    = top_df['dl']
     Ref['top{0}_que_ap'.format(i+1)]    = top_df['apair']
     Ref['top{0}_que_ms'.format(i+1)]    = top_df['maccs']
     Ref['top{0}_que_wavg'.format(i+1)]  = top_df['wavg']
-  Ref_fp.drop(columns=['mhfp6','ecfp4','dl','apair','maccs'], inplace=True)
-  rdpd.WriteSDF(Ref_fp, args.output+'.sdf.gz', molColName='mol', properties=list(Ref_fp.columns))
+  Ref.drop(columns=['ecfp4','dl','apair','maccs'], inplace=True)
+  rdpd.WriteSDF(Ref, args.output+'.sdf.gz', molColName='mol', properties=list(Ref.columns))
 
 
 ##########################################################################
 ## Import data and calculate FPs
-def InitialData( mol_file, mhfp_obj ):
+def InitialData( mol_file ):
   Que = RDkitRead(mol_file, removeHs=False)
-  Que['mhfp6'] = Que.mol.swifter.apply(lambda m: mhfp_obj.EncodeMol(m, radius=3, kekulize=False))
-  Que['ecfp4'] = Que.mol.swifter.apply(lambda m: AllChem.GetMorganFingerprintAsBitVect(m, 2, 2048))
-  Que['apair'] = Que.mol.swifter.apply(lambda m: Pairs.GetAtomPairFingerprintAsBitVect(m))
-  Que['dl']    = Que.mol.swifter.apply(lambda m: FingerprintMols.FingerprintMol(m))
-  Que['maccs'] = Que.mol.swifter.apply(lambda m: MACCSkeys.GenMACCSKeys(m))
+  Que['ecfp4'] = Que.mol.swifter.apply(lambda m:AllChem.GetMorganFingerprintAsBitVect(m, 2, 2048))
+  Que['apair'] = Que.mol.swifter.apply(lambda m:Pairs.GetAtomPairFingerprintAsBitVect(m))
+  Que['dl']    = Que.mol.swifter.apply(lambda m:FingerprintMols.FingerprintMol(m))
+  Que['maccs'] = Que.mol.swifter.apply(lambda m:MACCSkeys.GenMACCSKeys(m))
   return Que
 
 
 ##########################################################################
 ## Calculate Similarity Coefficient for different FPs and their weighted average
 class FPDistCalculator(object):
-  def __init__( self, ref_mh='', ref_ec='', ref_dl='', ref_ap='', ref_ms='', ref_sm='',
-                      ref_id='', que_id='', mh_obj=None, fp_r=[],   coeff='',  count=''  ):
-    self.ref_mh = ref_mh  # reference fp: mhfp6
+  def __init__( self, ref_ec='', ref_dl='', ref_ap='', ref_ms='', ref_sm='',
+                      ref_id='', que_id='', fp_r=[],   coeff='',  count=''  ):
     self.ref_ec = ref_ec  # reference fp: ecfp4
     self.ref_dl = ref_dl  # reference fp: daylight
     self.ref_ap = ref_ap  # reference fp: atom pairs
@@ -138,7 +133,6 @@ class FPDistCalculator(object):
     self.ref_sm = ref_sm  # reference smiles
     self.ref_id = ref_id  # reference ID column name
     self.que_id = que_id  # query ID column name
-    self.mh_obj = mh_obj  # mhfp encoder object
     self.fp_r   = fp_r    # ratio of fps
     self.coeff  = coeff   # similarity coefficient function
     self.count  = count   # show the order of MOL in number
@@ -147,11 +141,9 @@ class FPDistCalculator(object):
     return self.CompareFPs(Query)
 
 ############
-  def _weighted_avg( self, mhfp6, ecfp4, dl, apair, maccs ):
-    mh_r, ec_r, dl_r, ap_r, ms_r = self.fp_r
-    total = mhfp6*mh_r + ecfp4*ec_r + dl*dl_r + apair*ap_r + maccs*ms_r 
-    ratio = mh_r + ec_r + dl_r + ap_r + ms_r
-    return total/ratio
+  def _weighted_avg( self, ecfp4, dl, apair, maccs ):
+    ec_r, dl_r, ap_r, ms_r = self.fp_r
+    return ( ecfp4*ec_r + dl*dl_r + apair*ap_r + maccs*ms_r )/(ec_r + dl_r + ap_r + ms_r)
 
   ## Default similarity algorithm is Tanimoto. To control simi algorithm, add
   ## "metric=DataStructs.DiceSimilarity" into FingerprintSimilarity()
@@ -159,15 +151,11 @@ class FPDistCalculator(object):
     df = pd.DataFrame(columns=['_x'], index=list(range(len(Query))))
     df['ref_id'] = self.ref_id
     df['que_id'] = Query[self.que_id]
-
-    df['mhfp6']  = Query.mhfp6.swifter.apply(lambda m: 1. - mh_obj.Distance(self.ref_mh, m)) # Tanimoto = 1-Jaccard dissimilar distance
-#    df['mhfp6']  = Query.mhfp6.swifter.apply(lambda m: FingerprintSimilarity(self.ref_mh, m, metric=self.coeff))
-
     df['ecfp4']  = Query.ecfp4.swifter.apply(lambda m: FingerprintSimilarity(self.ref_ec, m, metric=self.coeff))
     df['dl']     = Query.dl.swifter.apply(   lambda m: FingerprintSimilarity(self.ref_dl, m, metric=self.coeff))
     df['apair']  = Query.apair.swifter.apply(lambda m: FingerprintSimilarity(self.ref_ap, m, metric=self.coeff))
     df['maccs']  = Query.maccs.swifter.apply(lambda m: FingerprintSimilarity(self.ref_ms, m, metric=self.coeff))
-    df['wavg']   = self._weighted_avg(df.mhfp6, df.ecfp4, df.dl, df.apair, df.maccs)
+    df['wavg']   = self._weighted_avg(df.ecfp4, df.dl, df.apair, df.maccs)
     df['ref_order'] = self.count
     df['ref_smi']   = self.ref_sm
     df['que_order'] = Query.que_order
@@ -231,7 +219,7 @@ def UserInput():
   p.add_argument('-que', dest='query', required=True,
                   help='Query MOL (sdf|smi) * gzip,bzip2 accepted')
   p.add_argument('-rank', dest='rank_fp', required=True,
-                  help='Rank mol with Fingerprint ("mhfp6", "ecfp4", "dl", "apair", "maccs", "wavg")')
+                  help='Rank mol with Fingerprint ("ecfp4", "dl", "apair", "maccs", "wavg")')
   p.add_argument('-pref', dest='output', required=True,
                   help='Output prefix')
 
@@ -246,8 +234,8 @@ def UserInput():
                   help='Optional: Cutoff to Similarity Coefficient (use -rank) to save (Def: 0.33)')
   p.add_argument('-dice', dest='dice', required=False, action='store_true',
                   help='Optional: Using *Dice* instead of *Tanimoto* for Similarity (Def: Tanimoto)')
-  p.add_argument('-ratio', dest='ratio', required=False, nargs='+', default=[2,2,2,2,1],
-                  help='Optional: Ratio of mhfp6:ecfp4:dl:apair:maccs Tc average (Def: 2 2 2 2 1)')
+  p.add_argument('-ratio', dest='ratio', required=False, nargs='+', default=[2,2,2,1],
+                  help='Optional: Ratio of ecfp4:dl:apair:maccs Tc average (Def: 2 2 2 1)')
   p.add_argument('-coeff', dest='coeff', required=False,
                   help='Optional: Cutoff to Tanimoto Coefficient to save (use -rank)')
   p.add_argument('-count', dest='count', required=False, action='store_true',
@@ -267,9 +255,8 @@ if __name__ == '__main__':
 #
 #  *OLD* version using MPI: 1_fp_2_compare.mpi.py
 
-#  v1.0  20.09.20  modernize with rdkit PandasTools
-#  v2    22.01.02  include MHFP fingerprint
-  
+#  v1.0  - 20.09.20  modernize with rdkit PandasTools
+
 #  Calculate chemical similarity coefficient of 2 sets of input mols
 #  Takes gzip files of both SDF (.sdf) and SMILES (.smi) formats.
 #  Files can contain multiple molecules.
